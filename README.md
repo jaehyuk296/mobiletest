@@ -3,6 +3,14 @@
 팀원의 `posture_test.py`(정면 카메라·목 길이 비율·어깨/고개 기울기)를 **명세서 v9**(측면, 머리~명치, 귀·어깨, H 하나)에 맞춰 다시 만든 테스트 코드입니다.
 0단계 실험(카메라 배치, `L_ref` 후보 비교, S 검증, 임계값 탐색)에 쓰도록 만들었습니다.
 
+## 가상환경
+python -m venv .venv
+source .venv/Scripts/activate
+
+python -m pip install --upgrade pip
+python -m pip install mediapipe opencv-python numpy scikit-learn joblib
+python -m pip install scikit-learn==1.6.1
+
 ## 파일
 
 | 파일 | 역할 |
