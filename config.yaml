@@ -1,0 +1,36 @@
+# ============================================================
+# 측면 상반신 자세 테스트 설정 (명세서 v9 C5 설정 키)
+# 모든 값은 임시 placeholder 입니다. 0단계 실험 후 확정하고
+# 이 파일 한 곳에서만 바꿉니다. (TODO(실험) = 실험으로 정할 값)
+# ============================================================
+
+# --- 측정 불가 판정 ---
+T_vis: 0.5                 # TODO(실험) 귀·어깨 최소 visibility
+N_low_vis: 5               # TODO(실험) 신뢰도 저하로 보는 연속 프레임 수
+frame_margin: 0.03         # TODO(실험) 화면 가장자리 마진 (이미지 폭/높이 비율)
+occlusion_flip_count: 4    # TODO(실험) 가림 의심: 이 횟수 이상 visibility가 급락/복귀 반복
+occlusion_window_sec: 3.0  # TODO(실험) 위 횟수를 세는 시간 창
+
+# --- 상태 판정 (H 기준, 부호 있는 비교: dH > T_forward) ---
+T_forward: 0.10            # TODO(실험) 전방 임계값 (dH 단위)
+T_hold_sec: 5.0            # TODO(실험) 주의 판정 지속 시간
+T_reset_sec: 10.0          # TODO(실험) 측정 불가가 이 시간을 넘으면 주의 타이머 초기화
+K_recover: 5               # TODO(실험) 판정 재개에 필요한 연속 안정 프레임 수
+hysteresis_ratio: 0.8      # TODO(실험) 주의 해제 조건: dH <= T_forward * 이 값
+alert_interval_sec: 30.0   # TODO(실험) 경고 재알림 최소 간격
+smooth_window: 5           # TODO 이동 중앙값 프레임 수 (1이면 사용 안 함)
+unavailable_prolonged_sec: 10.0   # 측정 불가가 이 시간 이상이면 안내 이벤트
+recalib_suggest_count: 3   # TODO 측정 불가 장기 지속이 이 횟수 반복되면 재캘리브레이션 "안내"만
+recalib_window_sec: 300.0
+
+# --- 캘리브레이션 ---
+calib_duration_sec: 7.0    # 명세 초기 제안 5~10초
+calib_min_frames: 30       # 안정 프레임 최소 개수
+calib_max_h_std: 0.05      # TODO(실험) 기준 구간 H 표준편차가 이보다 크면 "불안정" 경고 (우선 값을 로그로 보고 정함)
+
+# --- 기준 길이 L_ref (캘리브레이션에서 1회 측정해 고정) ---
+l_ref_mode: C              # C: |y_shoulder - y_ear| (기본안) / A: 귀-눈 거리 / B: 이미지 높이 * l_ref_B_frac
+l_ref_B_frac: 0.25         # B 후보용 상수 (이미지 높이 비율)
+
+# --- 실험 보조 ---
+conditions: [neutral, lean_fwd, head_fwd, recline, chair_moved, camera_moved]   # 키 1~6 으로 로그 라벨 지정
