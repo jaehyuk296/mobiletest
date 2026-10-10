@@ -4,13 +4,14 @@
 0단계 실험(카메라 배치, `L_ref` 후보 비교, S 검증, 임계값 탐색)에 쓰도록 만들었습니다.
 
 ## 가상환경
+```bash
 python -m venv .venv
 source .venv/Scripts/activate
 
 python -m pip install --upgrade pip
 python -m pip install mediapipe opencv-python numpy scikit-learn joblib
 python -m pip install scikit-learn==1.6.1
-
+```
 ## 파일
 
 | 파일 | 역할 |
