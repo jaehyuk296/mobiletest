@@ -195,6 +195,56 @@ class Calibrator:
         return cal, info
 
 
+
+# ------------------------------------------------------------------ 주의 판정 타이머 (분석기·로그 재생 공용)
+class AttentionTracker:
+    """dH(부호 있음)가 T_forward 를 넘는 시간을 누적해 주의 여부를 판정한다.
+    PostureAnalyzer 와 evaluate_sweep.py(로그 재생)가 같은 코드를 쓰도록 분리했다."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.acc = 0.0
+        self.active = False
+        self.last_alert_ts: Optional[float] = None
+        self.prev_good_ts: Optional[float] = None
+
+    def pause(self, unavail_dur: float) -> None:
+        """측정 불가 프레임: 누적 일시정지, 오래 지속되면 초기화."""
+        self.prev_good_ts = None
+        if unavail_dur >= self.cfg["T_reset_sec"]:
+            self.acc, self.active = 0.0, False
+
+    def step(self, ts: float, dH: float):
+        """측정 가능 프레임 하나를 처리. (internal_state, events) 반환."""
+        cfg = self.cfg
+        events: List[dict] = []
+        dt = 0.0 if self.prev_good_ts is None else min(ts - self.prev_good_ts, 1.0)
+        self.prev_good_ts = ts
+        T, hyst = cfg["T_forward"], cfg["hysteresis_ratio"]
+        internal = "normal"
+        if self.active:                                   # 주의 중: 히스테리시스 아래로 내려오면 해제
+            if dH <= T * hyst:                            # 부호 있는 비교 (후방 이동은 주의가 아님)
+                self.active, self.acc = False, 0.0
+                events.append({"type": "recovered", "ts": ts, "delta": dH})
+            else:
+                self.acc += dt
+                internal = "attention"
+                if self.last_alert_ts is None or ts - self.last_alert_ts >= cfg["alert_interval_sec"]:
+                    self.last_alert_ts = ts
+                    events.append({"type": "attention_started", "ts": ts, "delta": dH, "repeat": True})
+        else:
+            if dH > T:                                    # 부호 있는 비교
+                self.acc += dt
+                internal = "observing"
+                if self.acc >= cfg["T_hold_sec"]:
+                    self.active = True
+                    internal = "attention"
+                    self.last_alert_ts = ts
+                    events.append({"type": "attention_started", "ts": ts, "delta": dH})
+            else:
+                self.acc = 0.0
+        return internal, events
+
 # ------------------------------------------------------------------ 분석기
 class PostureAnalyzer:
     """모니터링 중 프레임을 받아 상태를 판정한다. 기준값(side/d/L_ref)은 바꾸지 않는다."""
@@ -210,13 +260,14 @@ class PostureAnalyzer:
         self._unavail_reason: Optional[str] = None
         self._prolonged_sent = False
         self._good_cnt = 0
-        self._prev_good_ts: Optional[float] = None
-        self._attn_acc = 0.0
-        self._attn_active = False
-        self._last_alert_ts: Optional[float] = None
+        self._tracker = AttentionTracker(cfg)
         self._h_win: collections.deque = collections.deque(maxlen=max(1, int(cfg["smooth_window"])))
         self._prolonged_times: collections.deque = collections.deque()
         self._last: Optional[Result] = None
+
+    @property
+    def _attn_acc(self) -> float:          # 테스트·표시용 (타이머 값)
+        return self._tracker.acc
 
     # -- 측정 가능 여부 -------------------------------------------------
     def _check(self, f: Frame) -> Optional[str]:
@@ -272,10 +323,8 @@ class PostureAnalyzer:
                 self._in_unavail, self._unavail_start, self._prolonged_sent = True, f.ts, False
             self._unavail_reason = reason
             self._good_cnt = 0
-            self._prev_good_ts = None                    # 주의 타이머 일시정지
             dur = f.ts - self._unavail_start
-            if dur >= cfg["T_reset_sec"]:                # 오래 지속되면 주의 타이머 초기화
-                self._attn_acc, self._attn_active = 0.0, False
+            self._tracker.pause(dur)                     # 주의 타이머 일시정지, 오래 지속되면 초기화
             if dur >= cfg["unavailable_prolonged_sec"] and not self._prolonged_sent:
                 self._prolonged_sent = True
                 events.append({"type": "unavailable_prolonged", "ts": f.ts})
@@ -285,7 +334,7 @@ class PostureAnalyzer:
                 if len(self._prolonged_times) >= cfg["recalib_suggest_count"]:
                     events.append({"type": "recalibration_suggested", "ts": f.ts})   # 안내만, 자동 갱신 금지
             r = Result(f.ts, "unavailable", "unavailable", reason, cal.side, cal.d, ear, sh,
-                       duration_sec=self._attn_acc, events=events)
+                       duration_sec=self._tracker.acc, events=events)
             self._last = r
             return r
 
@@ -294,7 +343,7 @@ class PostureAnalyzer:
             self._good_cnt += 1
             if self._good_cnt < cfg["K_recover"]:
                 r = Result(f.ts, "unavailable", "unavailable", self._unavail_reason, cal.side, cal.d,
-                           ear, sh, duration_sec=self._attn_acc)
+                           ear, sh, duration_sec=self._tracker.acc)
                 self._last = r
                 return r
             self._in_unavail = False
@@ -307,35 +356,10 @@ class PostureAnalyzer:
         dH = H - cal.H_base[mode]
         S = d * (sh[0] - cal.x_shoulder_base) / cal.L_ref[mode]   # 검증 지표: 로그 전용, 판정에 사용 안 함
 
-        dt = 0.0 if self._prev_good_ts is None else min(f.ts - self._prev_good_ts, 1.0)
-        self._prev_good_ts = f.ts
-
-        T, hyst = cfg["T_forward"], cfg["hysteresis_ratio"]
-        internal = "normal"
-        if self._attn_active:                             # 주의 중: 히스테리시스 아래로 내려오면 해제
-            if dH <= T * hyst:                            # 부호 있는 비교 (후방 이동은 주의가 아님)
-                self._attn_active, self._attn_acc = False, 0.0
-                events.append({"type": "recovered", "ts": f.ts, "delta": dH})
-            else:
-                self._attn_acc += dt
-                internal = "attention"
-                if self._last_alert_ts is None or f.ts - self._last_alert_ts >= cfg["alert_interval_sec"]:
-                    self._last_alert_ts = f.ts
-                    events.append({"type": "attention_started", "ts": f.ts, "delta": dH, "repeat": True})
-        else:
-            if dH > T:                                    # 부호 있는 비교
-                self._attn_acc += dt
-                internal = "observing"
-                if self._attn_acc >= cfg["T_hold_sec"]:
-                    self._attn_active = True
-                    internal = "attention"
-                    self._last_alert_ts = f.ts
-                    events.append({"type": "attention_started", "ts": f.ts, "delta": dH})
-            else:
-                self._attn_acc = 0.0
+        internal, events = self._tracker.step(f.ts, dH)
 
         state = "attention" if internal == "attention" else "normal"    # observing 은 API에 노출하지 않음
         r = Result(f.ts, state, internal, None, cal.side, cal.d, ear, sh, H, dH, S, H_all,
-                   self._attn_acc, events)
+                   self._tracker.acc, events)
         self._last = r
         return r

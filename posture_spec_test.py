@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--auto-calib", action="store_true", help="시작 직후 자동 캘리브레이션+자동 확인(영상 파일/헤드리스용)")
     ap.add_argument("--no-gui", action="store_true")
     ap.add_argument("--condition", default="neutral", help="초기 조건 라벨")
+    ap.add_argument("--tag", default="", help="로그 파일명에 붙일 꼬리표(예: 모델·카메라 배치 비교용 lite / full)")
     ap.add_argument("--speak-url", help="예: http://127.0.0.1:8081/speak (P3 TTS 연동 시험)")
     ap.add_argument("--width", type=int); ap.add_argument("--height", type=int)
     a = ap.parse_args()
@@ -71,10 +72,11 @@ def main():
     src, det = Source(a.camera, a.video, a.width, a.height), Detector(a.model)
     conds = cfg["conditions"]; cond = a.condition
 
-    writer = fh = None
+    writer = fh = log_path = None
     if a.log:
         os.makedirs(a.log_dir, exist_ok=True)
-        path = os.path.join(a.log_dir, time.strftime("log_%Y%m%d_%H%M%S.csv"))
+        path = os.path.join(a.log_dir, time.strftime("log_%Y%m%d_%H%M%S") + (f"_{a.tag}" if a.tag else "") + ".csv")
+        log_path = path
         fh = open(path, "w", newline="", encoding="utf-8"); writer = csv.writer(fh); writer.writerow(CSV_COLS)
         print("로그 저장:", path, "  ※ 개발용 실험 로그입니다. 실험이 끝나면 삭제하세요(프레임별 좌표 원본 저장 금지 원칙).")
 
@@ -85,6 +87,7 @@ def main():
         d = json.load(open(a.calib_file, encoding="utf-8"))
         cal = Calibration(**d); analyzer = PostureAnalyzer(cfg, cal); mode = "MONITORING"
         print("저장된 캘리브레이션 로드:", cal.side, cal.d, cal.l_ref_mode)
+        if log_path: json.dump(d, open(log_path + ".calib.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)
     if a.auto_calib and mode == "IDLE":
         mode, calibrator, calib_start = "CALIBRATING", Calibrator(cfg), None
 
@@ -180,8 +183,10 @@ def main():
             print("\n기준 자세 측정 시작 — 편안한 자세로 %.0f초 앉아 있으세요." % cfg["calib_duration_sec"])
         elif key == ord("y") and mode == "CONFIRM":
             cal = pending; analyzer = PostureAnalyzer(cfg, cal); mode = "MONITORING"
-            json.dump({k: getattr(cal, k) for k in ("side", "d", "l_ref_mode", "L_ref", "H_base", "x_shoulder_base", "info")},
-                      open(a.calib_file, "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)
+            cal_dict = {k: getattr(cal, k) for k in ("side", "d", "l_ref_mode", "L_ref", "H_base", "x_shoulder_base", "info")}
+            json.dump(cal_dict, open(a.calib_file, "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)
+            if log_path:    # 이 로그를 만든 캘리브레이션을 로그 옆에 함께 보관(evaluate_sweep.py 가 사용)
+                json.dump(cal_dict, open(log_path + ".calib.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1, default=str)
             print("기준값 저장 완료(side·d·L_ref 는 재캘리브레이션 전까지 고정). 모니터링 시작.\n")
         elif key == ord("n") and mode == "CONFIRM":
             mode = "IDLE"; print("다시 측정하려면 'c'")

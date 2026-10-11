@@ -1,0 +1,109 @@
+{
+  "target_label": "upperbody_label",
+  "group_column": "subject",
+  "landmarks": [
+    "nose",
+    "left_eye_inner",
+    "left_eye",
+    "left_eye_outer",
+    "right_eye_inner",
+    "right_eye",
+    "right_eye_outer",
+    "left_ear",
+    "right_ear",
+    "mouth_left",
+    "mouth_right",
+    "left_shoulder",
+    "right_shoulder"
+  ],
+  "axes": [
+    "x",
+    "y",
+    "z"
+  ],
+  "feature_columns": [
+    "nose_x",
+    "nose_y",
+    "nose_z",
+    "left_eye_inner_x",
+    "left_eye_inner_y",
+    "left_eye_inner_z",
+    "left_eye_x",
+    "left_eye_y",
+    "left_eye_z",
+    "left_eye_outer_x",
+    "left_eye_outer_y",
+    "left_eye_outer_z",
+    "right_eye_inner_x",
+    "right_eye_inner_y",
+    "right_eye_inner_z",
+    "right_eye_x",
+    "right_eye_y",
+    "right_eye_z",
+    "right_eye_outer_x",
+    "right_eye_outer_y",
+    "right_eye_outer_z",
+    "left_ear_x",
+    "left_ear_y",
+    "left_ear_z",
+    "right_ear_x",
+    "right_ear_y",
+    "right_ear_z",
+    "mouth_left_x",
+    "mouth_left_y",
+    "mouth_left_z",
+    "mouth_right_x",
+    "mouth_right_y",
+    "mouth_right_z",
+    "left_shoulder_x",
+    "left_shoulder_y",
+    "left_shoulder_z",
+    "right_shoulder_x",
+    "right_shoulder_y",
+    "right_shoulder_z"
+  ],
+  "normalization": {
+    "origin": "midpoint_of_left_and_right_shoulders",
+    "scale": "3d_euclidean_distance_between_shoulders",
+    "formula": "(landmark_xyz - shoulder_midpoint) / shoulder_width"
+  },
+  "labels": [
+    "TLB",
+    "TLF",
+    "TLL",
+    "TLR",
+    "TUP"
+  ],
+  "selected_config": {
+    "name": "MLP_small",
+    "hidden_layer_sizes": [
+      64,
+      32
+    ],
+    "alpha": 0.001
+  },
+  "cross_validation": {
+    "method": "LeaveOneGroupOut",
+    "number_of_subjects": 13,
+    "mean_subject_accuracy": 0.8311699199199197,
+    "mean_subject_macro_f1": 0.8006078887515572,
+    "pooled_accuracy": 0.8258239465999165,
+    "pooled_macro_f1": 0.8307011704459144
+  },
+  "final_training_samples": 4794,
+  "final_training_subjects": [
+    "1",
+    "10",
+    "11",
+    "12",
+    "13",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ]
+}
